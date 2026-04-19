@@ -5,9 +5,117 @@
     "url",
     "tel",
     "email",
-    "password",
     "number"
   ]);
+
+  const DEFAULT_SETTINGS = {
+    enabled: true,
+    blockedSites: []
+  };
+
+  let settings = { ...DEFAULT_SETTINGS };
+
+  function normalizeBlockedSites(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map((entry) => String(entry || "").trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  function parseHostRule(rule) {
+    if (!rule) {
+      return "";
+    }
+
+    const trimmed = rule.trim().toLowerCase();
+
+    try {
+      if (/^https?:\/\//.test(trimmed)) {
+        return new URL(trimmed).hostname;
+      }
+    } catch {
+      return "";
+    }
+
+    return trimmed.replace(/^\.+|\.+$/g, "");
+  }
+
+  function isBlockedHost(hostname) {
+    const host = String(hostname || "").toLowerCase();
+    if (!host) {
+      return false;
+    }
+
+    for (const rawRule of settings.blockedSites) {
+      const rule = parseHostRule(rawRule);
+      if (!rule) {
+        continue;
+      }
+
+      if (rule.startsWith("*.")) {
+        const domain = rule.slice(2);
+        if (domain && (host === domain || host.endsWith(`.${domain}`))) {
+          return true;
+        }
+        continue;
+      }
+
+      if (host === rule || host.endsWith(`.${rule}`)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function canRunOnCurrentSite() {
+    if (!settings.enabled) {
+      return false;
+    }
+
+    return !isBlockedHost(window.location.hostname);
+  }
+
+  function hydrateSettings(next) {
+    settings = {
+      enabled: typeof next.enabled === "boolean" ? next.enabled : DEFAULT_SETTINGS.enabled,
+      blockedSites: normalizeBlockedSites(next.blockedSites)
+    };
+  }
+
+  function loadSettings() {
+    if (!chrome?.storage?.sync) {
+      return;
+    }
+
+    chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
+      hydrateSettings(stored || DEFAULT_SETTINGS);
+    });
+  }
+
+  function watchSettingsChanges() {
+    if (!chrome?.storage?.onChanged) {
+      return;
+    }
+
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== "sync") {
+        return;
+      }
+
+      const next = { ...settings };
+      if (changes.enabled) {
+        next.enabled = changes.enabled.newValue;
+      }
+      if (changes.blockedSites) {
+        next.blockedSites = changes.blockedSites.newValue;
+      }
+      hydrateSettings(next);
+    });
+  }
 
   function isEditableElement(node) {
     if (!(node instanceof Element)) {
@@ -170,6 +278,10 @@
   }
 
   async function handleContextMenu(event) {
+    if (!canRunOnCurrentSite()) {
+      return;
+    }
+
     const target = findEditableTargetFromEvent(event);
     if (!target) {
       return;
@@ -204,4 +316,7 @@
   document.addEventListener("contextmenu", (event) => {
     void handleContextMenu(event);
   }, true);
+
+  loadSettings();
+  watchSettingsChanges();
 })();
