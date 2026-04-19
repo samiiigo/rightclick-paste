@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Right-Click Clipboard Paste",
+  "version": "1.0.0",
+  "description": "Adds a 'Paste clipboard' context menu item to editable text fields.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "contextMenus",
+    "scripting",
+    "activeTab"
+  ]
+}
