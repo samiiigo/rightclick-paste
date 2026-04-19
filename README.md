@@ -12,6 +12,8 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 - Runs through a lightweight MV3 content script across frames where permitted.
 - Does not target password fields.
 - Includes an options page to enable/disable behavior and block specific sites.
+- Includes a toolbar popup to quickly toggle globally and for the current site.
+- Includes a keyboard command to toggle the extension enabled state.
 
 ## Installation (Unpacked)
 
@@ -26,6 +28,19 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 2. Right-click inside the field.
 3. Clipboard text is pasted immediately at the caret (or replaces selection).
 
+### Quick popup controls
+
+1. Click the extension icon in the Chrome toolbar.
+2. Use **Enabled globally** to turn the feature on/off everywhere.
+3. Use **Enabled on this site** to allow/block the current hostname quickly.
+
+### Keyboard shortcut
+
+1. Open `chrome://extensions/shortcuts`.
+2. Find **Right-Click Clipboard Paste**.
+3. Assign or change the shortcut for **Toggle Right-Click Clipboard Paste on or off**.
+4. Press the shortcut to flip global enabled status instantly.
+
 ## Options
 
 1. Open `chrome://extensions`.
@@ -39,6 +54,7 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 
 - `clipboardRead`: read clipboard text from the right-click user gesture.
 - `storage`: persist extension options (enabled toggle and blocked sites).
+- `tabs`: detect current tab hostname for popup site toggle.
 
 ## Privacy
 

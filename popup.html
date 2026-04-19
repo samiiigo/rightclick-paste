@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Right-Click Clipboard Paste</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg-top: #ebf8ff;
+        --bg-bottom: #f8fafc;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --border: #cbd5e1;
+        --ok: #0f766e;
+        --danger: #b91c1c;
+        --link: #0e7490;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-top: #0b1220;
+          --bg-bottom: #141c2e;
+          --panel: #1a2436;
+          --text: #e2e8f0;
+          --muted: #a0aec0;
+          --border: #334155;
+          --ok: #34d399;
+          --danger: #fb7185;
+          --link: #67e8f9;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 330px;
+        min-height: 260px;
+        background: linear-gradient(170deg, var(--bg-top), var(--bg-bottom));
+        color: var(--text);
+        font: 14px/1.4 "Segoe UI", "Noto Sans", sans-serif;
+      }
+
+      .wrap {
+        padding: 14px;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+
+      .sub {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .label {
+        font-weight: 600;
+      }
+
+      .desc {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        word-break: break-all;
+      }
+
+      .status {
+        margin-top: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .status.ok {
+        color: var(--ok);
+      }
+
+      .status.off {
+        color: var(--danger);
+      }
+
+      a {
+        color: var(--link);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      #hint {
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Right-Click Paste</h1>
+      <p class="sub">Quick controls for this browser and this site.</p>
+
+      <section class="card">
+        <div class="row">
+          <div class="label">Enabled globally</div>
+          <input id="toggleGlobal" type="checkbox" />
+        </div>
+        <div id="globalStatus" class="status"></div>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <div class="label">Enabled on this site</div>
+          <input id="toggleSite" type="checkbox" />
+        </div>
+        <div id="siteHost" class="desc"></div>
+        <div id="siteStatus" class="status"></div>
+      </section>
+
+      <div class="row">
+        <a href="#" id="openOptions">Open full options</a>
+        <a href="#" id="openShortcuts">Keyboard shortcuts</a>
+      </div>
+      <div id="hint">Set or change keybinding for toggle in Chrome shortcuts page.</div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

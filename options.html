@@ -6,8 +6,10 @@
     <title>Right-Click Clipboard Paste Options</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --bg: #f5f7fb;
+        --bg-top: #eef4ff;
+        --bg-bottom: #eef6f4;
         --panel: #ffffff;
         --text: #17202a;
         --muted: #5d6d7e;
@@ -15,6 +17,23 @@
         --accent: #0e7490;
         --accent-strong: #155e75;
         --ok: #0f766e;
+        --row-bg: #fbfdff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111827;
+          --bg-top: #0f172a;
+          --bg-bottom: #17222f;
+          --panel: #1f2937;
+          --text: #e5e7eb;
+          --muted: #94a3b8;
+          --border: #334155;
+          --accent: #22d3ee;
+          --accent-strong: #06b6d4;
+          --ok: #34d399;
+          --row-bg: #111b2a;
+        }
       }
 
       * {
@@ -24,7 +43,7 @@
       body {
         margin: 0;
         min-height: 100vh;
-        background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 42%, #eef6f4 100%);
+        background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 42%, var(--bg-bottom) 100%);
         color: var(--text);
         font: 15px/1.5 "Segoe UI", "Noto Sans", sans-serif;
         display: grid;
@@ -60,7 +79,7 @@
         padding: 12px;
         border: 1px solid var(--border);
         border-radius: 10px;
-        background: #fbfdff;
+        background: var(--row-bg);
       }
 
       label {

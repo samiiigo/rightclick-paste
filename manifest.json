@@ -3,8 +3,24 @@
   "name": "Right-Click Clipboard Paste",
   "description": "Pastes clipboard text directly into editable fields on right-click.",
   "version": "1.2.0",
-  "permissions": ["clipboardRead", "storage"],
+  "permissions": ["clipboardRead", "storage", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Right-Click Clipboard Paste",
+    "default_popup": "popup.html"
+  },
   "options_page": "options.html",
+  "commands": {
+    "toggle-extension-enabled": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Toggle Right-Click Clipboard Paste on or off"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
