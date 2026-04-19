@@ -10,7 +10,8 @@
 
   const DEFAULT_SETTINGS = {
     enabled: true,
-    blockedSites: []
+    blockedSites: [],
+    alwaysPaste: false
   };
 
   let settings = { ...DEFAULT_SETTINGS };
@@ -82,7 +83,8 @@
   function hydrateSettings(next) {
     settings = {
       enabled: typeof next.enabled === "boolean" ? next.enabled : DEFAULT_SETTINGS.enabled,
-      blockedSites: normalizeBlockedSites(next.blockedSites)
+      blockedSites: normalizeBlockedSites(next.blockedSites),
+      alwaysPaste: typeof next.alwaysPaste === "boolean" ? next.alwaysPaste : DEFAULT_SETTINGS.alwaysPaste
     };
   }
 
@@ -113,8 +115,24 @@
       if (changes.blockedSites) {
         next.blockedSites = changes.blockedSites.newValue;
       }
+      if (changes.alwaysPaste) {
+        next.alwaysPaste = changes.alwaysPaste.newValue;
+      }
       hydrateSettings(next);
     });
+  }
+
+  function isEditorEmpty(target) {
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      return target.value.length === 0;
+    }
+
+    if (target instanceof Element && target.isContentEditable) {
+      const text = (target.textContent || "").trim();
+      return text.length === 0;
+    }
+
+    return false;
   }
 
   function isEditableElement(node) {
@@ -284,6 +302,10 @@
 
     const target = findEditableTargetFromEvent(event);
     if (!target) {
+      return;
+    }
+
+    if (!settings.alwaysPaste && !isEditorEmpty(target)) {
       return;
     }
 

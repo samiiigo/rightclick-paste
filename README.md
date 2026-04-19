@@ -4,7 +4,7 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 
 ## Features
 
-- Pastes immediately on right-click inside editable content (input, textarea, contenteditable).
+- Pastes on right-click inside editable content only when the target field is empty by default.
 - No custom extension context menu is used.
 - Reads clipboard text at click time and inserts it into the clicked editor.
 - Handles caret insertion, selection replacement, and empty-field paste.
@@ -14,6 +14,7 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 - Includes an options page to enable/disable behavior and block specific sites.
 - Includes a toolbar popup to quickly toggle globally and for the current site.
 - Includes a keyboard command to toggle the extension enabled state.
+- Includes an Always paste option to restore paste behavior even for non-empty fields.
 
 ## Installation (Unpacked)
 
@@ -25,14 +26,16 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 ## Usage
 
 1. Open any page with an editable field.
-2. Right-click inside the field.
-3. Clipboard text is pasted immediately at the caret (or replaces selection).
+2. Right-click inside an empty editable field.
+3. Clipboard text is pasted at the caret.
+4. If the field is not empty, normal context menu behavior is preserved unless Always paste is enabled.
 
 ### Quick popup controls
 
 1. Click the extension icon in the Chrome toolbar.
 2. Use **Enabled globally** to turn the feature on/off everywhere.
 3. Use **Enabled on this site** to allow/block the current hostname quickly.
+4. Use **Always paste** to allow auto-paste even when fields are not empty.
 
 ### Keyboard shortcut
 
@@ -48,6 +51,7 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 3. Click **Details** -> **Extension options**.
 4. Configure:
 	- **Enable extension behavior**: turn auto-paste on/off globally.
+	- **Always paste**: when enabled, auto-paste also runs on non-empty fields.
 	- **Blocked sites**: one rule per line (for example `bank.example.com`, `*.example.com`, or full URLs).
 
 ## Permissions

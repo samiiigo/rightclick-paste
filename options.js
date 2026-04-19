@@ -1,10 +1,12 @@
 (() => {
   const DEFAULTS = {
     enabled: true,
-    blockedSites: []
+    blockedSites: [],
+    alwaysPaste: false
   };
 
   const enabledCheckbox = document.getElementById("enabled");
+  const alwaysPasteCheckbox = document.getElementById("alwaysPaste");
   const blockedSitesTextarea = document.getElementById("blockedSites");
   const saveButton = document.getElementById("save");
   const statusLabel = document.getElementById("status");
@@ -28,6 +30,7 @@
   function restoreOptions() {
     chrome.storage.sync.get(DEFAULTS, (items) => {
       enabledCheckbox.checked = Boolean(items.enabled);
+      alwaysPasteCheckbox.checked = Boolean(items.alwaysPaste);
       blockedSitesTextarea.value = Array.isArray(items.blockedSites)
         ? items.blockedSites.join("\n")
         : "";
@@ -38,6 +41,7 @@
     const blockedSites = normalizeLines(blockedSitesTextarea.value);
     const payload = {
       enabled: enabledCheckbox.checked,
+      alwaysPaste: alwaysPasteCheckbox.checked,
       blockedSites
     };
 

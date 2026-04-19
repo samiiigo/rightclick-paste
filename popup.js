@@ -1,11 +1,13 @@
 (() => {
   const DEFAULTS = {
     enabled: true,
-    blockedSites: []
+    blockedSites: [],
+    alwaysPaste: false
   };
 
   const globalToggle = document.getElementById("toggleGlobal");
   const siteToggle = document.getElementById("toggleSite");
+  const alwaysPasteToggle = document.getElementById("toggleAlwaysPaste");
   const siteHostLabel = document.getElementById("siteHost");
   const globalStatus = document.getElementById("globalStatus");
   const siteStatus = document.getElementById("siteStatus");
@@ -77,7 +79,8 @@
     chrome.storage.sync.get(DEFAULTS, (stored) => {
       callback({
         enabled: typeof stored.enabled === "boolean" ? stored.enabled : DEFAULTS.enabled,
-        blockedSites: normalizeRules(stored.blockedSites)
+        blockedSites: normalizeRules(stored.blockedSites),
+        alwaysPaste: typeof stored.alwaysPaste === "boolean" ? stored.alwaysPaste : DEFAULTS.alwaysPaste
       });
     });
   }
@@ -89,6 +92,7 @@
     const blocked = isBlockedForHost(currentHost, settings.blockedSites);
     siteToggle.checked = !blocked;
     updateSiteStatus(!blocked && settings.enabled);
+    alwaysPasteToggle.checked = settings.alwaysPaste;
   }
 
   function saveSettings(next) {
@@ -101,7 +105,8 @@
     withStorage((settings) => {
       const next = {
         enabled: globalToggle.checked,
-        blockedSites: settings.blockedSites
+        blockedSites: settings.blockedSites,
+        alwaysPaste: settings.alwaysPaste
       };
       saveSettings(next);
     });
@@ -122,7 +127,19 @@
 
       const next = {
         enabled: settings.enabled,
-        blockedSites: Array.from(set).sort()
+        blockedSites: Array.from(set).sort(),
+        alwaysPaste: settings.alwaysPaste
+      };
+      saveSettings(next);
+    });
+  }
+
+  function toggleAlwaysPaste() {
+    withStorage((settings) => {
+      const next = {
+        enabled: settings.enabled,
+        blockedSites: settings.blockedSites,
+        alwaysPaste: alwaysPasteToggle.checked
       };
       saveSettings(next);
     });
@@ -131,6 +148,7 @@
   function bindEvents() {
     globalToggle.addEventListener("change", toggleGlobal);
     siteToggle.addEventListener("change", toggleSite);
+    alwaysPasteToggle.addEventListener("change", toggleAlwaysPaste);
     optionsLink.addEventListener("click", (event) => {
       event.preventDefault();
       chrome.runtime.openOptionsPage();
