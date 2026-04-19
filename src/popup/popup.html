@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Right-Click Clipboard Paste</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Right-Click Paste</h1>
+      <p class="sub">Quick controls for this browser and this site.</p>
+
+      <section class="card">
+        <div class="row">
+          <div class="label">Enabled globally</div>
+          <input id="toggleGlobal" type="checkbox" />
+        </div>
+        <div id="globalStatus" class="status"></div>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <div class="label">Enabled on this site</div>
+          <input id="toggleSite" type="checkbox" />
+        </div>
+        <div id="siteHost" class="desc"></div>
+        <div id="siteStatus" class="status"></div>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <div class="label">Always paste</div>
+          <input id="toggleAlwaysPaste" type="checkbox" />
+        </div>
+        <div class="desc">When off, auto-paste triggers only for empty fields.</div>
+      </section>
+
+      <div class="row">
+        <a href="#" id="openOptions">Open full options</a>
+        <a href="#" id="openShortcuts">Keyboard shortcuts</a>
+      </div>
+      <div id="hint">Set or change keybinding for toggle in Chrome shortcuts page.</div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

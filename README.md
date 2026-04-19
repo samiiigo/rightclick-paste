@@ -21,7 +21,7 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 1. Open Chrome and go to `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
-4. Select this folder (`rightclick-paste`).
+4. Select the project root folder.
 
 ## Usage
 
