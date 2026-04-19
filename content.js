@@ -1,0 +1,207 @@
+(() => {
+  const TEXT_INPUT_TYPES = new Set([
+    "text",
+    "search",
+    "url",
+    "tel",
+    "email",
+    "password",
+    "number"
+  ]);
+
+  function isEditableElement(node) {
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
+    if (node instanceof HTMLTextAreaElement) {
+      return !node.disabled && !node.readOnly;
+    }
+
+    if (node instanceof HTMLInputElement) {
+      const type = (node.type || "text").toLowerCase();
+      return TEXT_INPUT_TYPES.has(type) && !node.disabled && !node.readOnly;
+    }
+
+    return node.isContentEditable;
+  }
+
+  function findEditableTargetFromEvent(event) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+
+    for (const node of path) {
+      if (isEditableElement(node)) {
+        return node;
+      }
+
+      if (node instanceof Element) {
+        const nearest = node.closest("textarea, input, [contenteditable]");
+        if (isEditableElement(nearest)) {
+          return nearest;
+        }
+      }
+    }
+
+    const active = document.activeElement;
+    if (isEditableElement(active)) {
+      return active;
+    }
+
+    return null;
+  }
+
+  function dispatchEditableEvents(target, insertedText) {
+    try {
+      target.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          composed: true,
+          inputType: "insertFromPaste",
+          data: insertedText
+        })
+      );
+    } catch {
+      target.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    }
+
+    target.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function setCaretForContentEditable(target, x, y) {
+    let range = null;
+
+    if (typeof document.caretRangeFromPoint === "function") {
+      range = document.caretRangeFromPoint(x, y);
+    } else if (typeof document.caretPositionFromPoint === "function") {
+      const position = document.caretPositionFromPoint(x, y);
+      if (position) {
+        range = document.createRange();
+        range.setStart(position.offsetNode, position.offset);
+        range.collapse(true);
+      }
+    }
+
+    if (!range || !target.contains(range.commonAncestorContainer)) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function insertIntoInputLike(target, text) {
+    const start = typeof target.selectionStart === "number" ? target.selectionStart : target.value.length;
+    const end = typeof target.selectionEnd === "number" ? target.selectionEnd : start;
+
+    if (typeof target.setRangeText === "function") {
+      target.setRangeText(text, start, end, "end");
+    } else {
+      target.value = target.value.slice(0, start) + text + target.value.slice(end);
+      const nextCaret = start + text.length;
+      if (typeof target.setSelectionRange === "function") {
+        target.setSelectionRange(nextCaret, nextCaret);
+      }
+    }
+
+    dispatchEditableEvents(target, text);
+    return true;
+  }
+
+  function insertIntoContentEditable(target, text) {
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+
+    let range;
+    if (selection.rangeCount > 0) {
+      range = selection.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+    }
+
+    if (!target.contains(range.commonAncestorContainer)) {
+      range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    dispatchEditableEvents(target, text);
+    return true;
+  }
+
+  async function readClipboardTextWithFallback() {
+    try {
+      const text = await navigator.clipboard.readText();
+      return { ok: true, text: text ?? "", usedFallback: false };
+    } catch {
+      const manual = window.prompt(
+        "Clipboard read is blocked on this page. Paste text manually and press OK to continue:"
+      );
+
+      if (manual === null) {
+        return {
+          ok: false,
+          error:
+            "Unable to access clipboard automatically here, and manual fallback was canceled."
+        };
+      }
+
+      return { ok: true, text: manual, usedFallback: true };
+    }
+  }
+
+  async function handleContextMenu(event) {
+    const target = findEditableTargetFromEvent(event);
+    if (!target) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    target.focus({ preventScroll: true });
+
+    if (target.isContentEditable) {
+      setCaretForContentEditable(target, event.clientX, event.clientY);
+    }
+
+    const clipboardResult = await readClipboardTextWithFallback();
+    if (!clipboardResult.ok) {
+      alert(`Right-Click Clipboard Paste: ${clipboardResult.error}`);
+      return;
+    }
+
+    const text = clipboardResult.text;
+    const success =
+      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+        ? insertIntoInputLike(target, text)
+        : insertIntoContentEditable(target, text);
+
+    if (!success) {
+      alert("Right-Click Clipboard Paste: This editor does not support scripted paste in its current state.");
+    }
+  }
+
+  document.addEventListener("contextmenu", (event) => {
+    void handleContextMenu(event);
+  }, true);
+})();

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Right-Click Clipboard Paste",
+  "description": "Pastes clipboard text directly into editable fields on right-click.",
+  "version": "1.1.0",
+  "permissions": ["clipboardRead"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ]
+}
