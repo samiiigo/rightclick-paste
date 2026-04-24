@@ -1,12 +1,6 @@
 (() => {
-  const TEXT_INPUT_TYPES = new Set([
-    "text",
-    "search",
-    "url",
-    "tel",
-    "email",
-    "number"
-  ]);
+  const TEXT_INPUT_TYPES = new Set(["text", "search", "url", "tel", "email", "number"]);
+  const PENDING_CLIPBOARD_TTL_MS = 2000;
 
   const DEFAULT_SETTINGS = {
     enabled: true,
@@ -15,6 +9,8 @@
   };
 
   let settings = { ...DEFAULT_SETTINGS };
+  let lastCopiedSelection = "";
+  let pendingRightClickPaste = null;
 
   function normalizeBlockedSites(value) {
     if (!Array.isArray(value)) {
@@ -128,8 +124,7 @@
     }
 
     if (target instanceof Element && target.isContentEditable) {
-      const text = (target.textContent || "").trim();
-      return text.length === 0;
+      return (target.textContent || "").trim().length === 0;
     }
 
     return false;
@@ -176,6 +171,142 @@
     return null;
   }
 
+  function getInputSelectionRange(target) {
+    if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+      return null;
+    }
+
+    const start = typeof target.selectionStart === "number" ? target.selectionStart : 0;
+    const end = typeof target.selectionEnd === "number" ? target.selectionEnd : start;
+    return { start, end };
+  }
+
+  function getRangeAtClientPoint(x, y) {
+    if (typeof document.caretRangeFromPoint === "function") {
+      return document.caretRangeFromPoint(x, y);
+    }
+
+    if (typeof document.caretPositionFromPoint === "function") {
+      const position = document.caretPositionFromPoint(x, y);
+      if (!position) {
+        return null;
+      }
+      const range = document.createRange();
+      range.setStart(position.offsetNode, position.offset);
+      range.collapse(true);
+      return range;
+    }
+
+    return null;
+  }
+
+  function getTrimmedSelectedTextFromTarget(target) {
+    const range = getInputSelectionRange(target);
+    if (range && range.end > range.start) {
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        return target.value.slice(range.start, range.end).trim();
+      }
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return "";
+    }
+
+    return selection.toString().trim();
+  }
+
+  function isClickInsideContentEditableSelection(event) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return false;
+    }
+
+    const probe = getRangeAtClientPoint(event.clientX, event.clientY);
+    if (!probe) {
+      return false;
+    }
+
+    const container = probe.startContainer;
+    const offset = probe.startOffset;
+
+    for (let i = 0; i < selection.rangeCount; i += 1) {
+      const r = selection.getRangeAt(i);
+      if (typeof r.isPointInRange === "function" && r.isPointInRange(container, offset)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function isRightClickOnActiveSelection(event, target) {
+    const range = getInputSelectionRange(target);
+    if (range) {
+      return range.end > range.start;
+    }
+
+    return isClickInsideContentEditableSelection(event);
+  }
+
+  async function copyTextToClipboard(text) {
+    if (!text) {
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const previousActive = document.activeElement;
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "true");
+      helper.style.cssText = "position:fixed;top:-9999px;opacity:0";
+      document.body.appendChild(helper);
+      helper.focus();
+      helper.select();
+
+      const ok = document.execCommand("copy");
+      document.body.removeChild(helper);
+
+      if (previousActive instanceof HTMLElement) {
+        previousActive.focus({ preventScroll: true });
+      }
+
+      return ok;
+    }
+  }
+
+  function suppressContextMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  async function tryHandleCopySelectionToClipboard(event) {
+    if (!(event.target instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (!isRightClickOnActiveSelection(event, event.target)) {
+      return false;
+    }
+
+    const selected = getTrimmedSelectedTextFromTarget(event.target);
+    if (!selected || selected === lastCopiedSelection) {
+      return false;
+    }
+
+    suppressContextMenu(event);
+
+    const ok = await copyTextToClipboard(selected);
+    if (ok) {
+      lastCopiedSelection = selected;
+    }
+
+    return true;
+  }
+
   function dispatchEditableEvents(target, insertedText) {
     try {
       target.dispatchEvent(
@@ -194,19 +325,7 @@
   }
 
   function setCaretForContentEditable(target, x, y) {
-    let range = null;
-
-    if (typeof document.caretRangeFromPoint === "function") {
-      range = document.caretRangeFromPoint(x, y);
-    } else if (typeof document.caretPositionFromPoint === "function") {
-      const position = document.caretPositionFromPoint(x, y);
-      if (position) {
-        range = document.createRange();
-        range.setStart(position.offsetNode, position.offset);
-        range.collapse(true);
-      }
-    }
-
+    const range = getRangeAtClientPoint(x, y);
     if (!range || !target.contains(range.commonAncestorContainer)) {
       return;
     }
@@ -228,9 +347,9 @@
       target.setRangeText(text, start, end, "end");
     } else {
       target.value = target.value.slice(0, start) + text + target.value.slice(end);
-      const nextCaret = start + text.length;
+      const next = start + text.length;
       if (typeof target.setSelectionRange === "function") {
-        target.setSelectionRange(nextCaret, nextCaret);
+        target.setSelectionRange(next, next);
       }
     }
 
@@ -264,7 +383,6 @@
     range.deleteContents();
     const textNode = document.createTextNode(text);
     range.insertNode(textNode);
-
     range.setStartAfter(textNode);
     range.collapse(true);
     selection.removeAllRanges();
@@ -274,13 +392,96 @@
     return true;
   }
 
+  function insertClipboardTextAtContextMenuPoint(event, target, text) {
+    target.focus({ preventScroll: true });
+
+    if (target.isContentEditable) {
+      setCaretForContentEditable(target, event.clientX, event.clientY);
+    }
+
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      return insertIntoInputLike(target, text);
+    }
+
+    return insertIntoContentEditable(target, text);
+  }
+
   async function readClipboardText() {
     try {
       const text = await navigator.clipboard.readText();
-      return text ?? "";
+      return { ok: true, text: text ?? "" };
     } catch {
-      return "";
+      return { ok: false, text: "" };
     }
+  }
+
+  function clearPendingPaste() {
+    pendingRightClickPaste = null;
+  }
+
+  function isFreshPendingForTarget(target) {
+    if (!pendingRightClickPaste || pendingRightClickPaste.target !== target) {
+      return false;
+    }
+
+    return Date.now() - pendingRightClickPaste.capturedAt <= PENDING_CLIPBOARD_TTL_MS;
+  }
+
+  function shouldBlockMenuForPendingRead(p) {
+    return (
+      Boolean(p) &&
+      (!p.resolved || Boolean(p.result?.ok && p.result.text))
+    );
+  }
+
+  function startPendingReadForRightMouseDownIfEligible(event) {
+    if (!canRunOnCurrentSite() || event.button !== 2) {
+      clearPendingPaste();
+      return;
+    }
+
+    const target = findEditableTargetFromEvent(event);
+    if (!target) {
+      clearPendingPaste();
+      return;
+    }
+
+    if (!settings.alwaysPaste && !isEditorEmpty(target)) {
+      clearPendingPaste();
+      return;
+    }
+
+    const session = {
+      target,
+      capturedAt: Date.now(),
+      resolved: false,
+      result: null,
+      promise: readClipboardText()
+    };
+
+    pendingRightClickPaste = session;
+
+    session.promise.then((result) => {
+      if (pendingRightClickPaste === session) {
+        session.resolved = true;
+        session.result = result;
+      }
+    });
+  }
+
+  async function consumeClipboardTextForAutoPaste(usePending) {
+    try {
+      if (usePending && pendingRightClickPaste) {
+        return await pendingRightClickPaste.promise;
+      }
+      return await readClipboardText();
+    } finally {
+      clearPendingPaste();
+    }
+  }
+
+  function shouldRunAutoPasteInEditor(target) {
+    return settings.alwaysPaste || isEditorEmpty(target);
   }
 
   async function handleContextMenu(event) {
@@ -288,38 +489,36 @@
       return;
     }
 
+    if (await tryHandleCopySelectionToClipboard(event)) {
+      return;
+    }
+
     const target = findEditableTargetFromEvent(event);
-    if (!target) {
+    if (!target || !shouldRunAutoPasteInEditor(target)) {
       return;
     }
 
-    if (!settings.alwaysPaste && !isEditorEmpty(target)) {
+    const usePending = isFreshPendingForTarget(target);
+    if (usePending && shouldBlockMenuForPendingRead(pendingRightClickPaste)) {
+      suppressContextMenu(event);
+    }
+
+    const { ok, text } = await consumeClipboardTextForAutoPaste(usePending);
+    if (!ok || !text) {
       return;
     }
 
-    const text = await readClipboardText();
-    if (!text) {
-      return;
-    }
-
-    target.focus({ preventScroll: true });
-
-    if (target.isContentEditable) {
-      setCaretForContentEditable(target, event.clientX, event.clientY);
-    }
-
-    const success =
-      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-        ? insertIntoInputLike(target, text)
-        : insertIntoContentEditable(target, text);
-
+    const success = insertClipboardTextAtContextMenuPoint(event, target, text);
     if (!success) {
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
+    suppressContextMenu(event);
   }
+
+  document.addEventListener("mousedown", (event) => {
+    startPendingReadForRightMouseDownIfEligible(event);
+  }, true);
 
   document.addEventListener("contextmenu", (event) => {
     void handleContextMenu(event);
