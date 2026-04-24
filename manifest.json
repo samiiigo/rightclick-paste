@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Right-Click Clipboard Paste",
   "description": "Pastes clipboard text directly into editable fields on right-click.",
-  "version": "1.2.0",
+  "version": "1.3.6",
   "icons": {
     "16": "src/icons/icon16.png",
     "32": "src/icons/icon32.png",

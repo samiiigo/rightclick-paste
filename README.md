@@ -72,7 +72,7 @@ The extension injects `content.js` on all URLs via `content_scripts` so it can l
 
 - Some sites and browser surfaces (for example internal Chrome pages) block extension scripts or clipboard reads.
 - Clipboard access via `navigator.clipboard.readText()` can fail on certain pages depending on user activation and site/browser restrictions.
-- If direct clipboard read fails, the extension falls back to a manual prompt. This requires you to paste text yourself and can be less convenient.
+- If direct clipboard read fails, the extension preserves the normal context menu instead of auto-pasting.
 - The extension suppresses the normal right-click context menu for editable targets where auto-paste is attempted.
 - Complex editors in cross-origin iframes or heavily sandboxed environments may interfere with scripted paste behavior.
 
