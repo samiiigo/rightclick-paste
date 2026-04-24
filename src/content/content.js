@@ -11,10 +11,17 @@
   const DEFAULT_SETTINGS = {
     enabled: true,
     blockedSites: [],
-    alwaysPaste: false
+    alwaysPaste: false,
+    selectionDoubleRightClickMenu: true
   };
 
   let settings = { ...DEFAULT_SETTINGS };
+  const CLIPBOARD_PRELOAD_MAX_AGE_MS = 1500;
+  /** Second right-click on the same text field within this window forces paste even when not empty. */
+  const DOUBLE_RIGHT_CLICK_MS = 500;
+  let clipboardPreload = null;
+  let lastRightClickedSelectionText = null;
+  let lastTextFieldContextMenu = { target: null, time: 0 };
 
   function normalizeBlockedSites(value) {
     if (!Array.isArray(value)) {
@@ -84,7 +91,11 @@
     settings = {
       enabled: typeof next.enabled === "boolean" ? next.enabled : DEFAULT_SETTINGS.enabled,
       blockedSites: normalizeBlockedSites(next.blockedSites),
-      alwaysPaste: typeof next.alwaysPaste === "boolean" ? next.alwaysPaste : DEFAULT_SETTINGS.alwaysPaste
+      alwaysPaste: typeof next.alwaysPaste === "boolean" ? next.alwaysPaste : DEFAULT_SETTINGS.alwaysPaste,
+      selectionDoubleRightClickMenu:
+        typeof next.selectionDoubleRightClickMenu === "boolean"
+          ? next.selectionDoubleRightClickMenu
+          : DEFAULT_SETTINGS.selectionDoubleRightClickMenu
     };
   }
 
@@ -118,6 +129,9 @@
       if (changes.alwaysPaste) {
         next.alwaysPaste = changes.alwaysPaste.newValue;
       }
+      if (changes.selectionDoubleRightClickMenu) {
+        next.selectionDoubleRightClickMenu = changes.selectionDoubleRightClickMenu.newValue;
+      }
       hydrateSettings(next);
     });
   }
@@ -135,7 +149,7 @@
     return false;
   }
 
-  function isEditableElement(node) {
+  function isTextFieldElement(node) {
     if (!(node instanceof Element)) {
       return false;
     }
@@ -149,7 +163,34 @@
       return TEXT_INPUT_TYPES.has(type) && !node.disabled && !node.readOnly;
     }
 
+    return false;
+  }
+
+  function isEditableElement(node) {
+    if (isTextFieldElement(node)) {
+      return true;
+    }
+
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
     return node.isContentEditable;
+  }
+
+  function isSecondRightClickOnSameTextField(target) {
+    if (!isTextFieldElement(target)) {
+      return false;
+    }
+
+    const { target: lastTarget, time } = lastTextFieldContextMenu;
+    return lastTarget === target && Date.now() - time < DOUBLE_RIGHT_CLICK_MS;
+  }
+
+  function touchTextFieldContextMenu(target) {
+    if (isTextFieldElement(target)) {
+      lastTextFieldContextMenu = { target, time: Date.now() };
+    }
   }
 
   function findEditableTargetFromEvent(event) {
@@ -274,29 +315,45 @@
     return true;
   }
 
-  async function readClipboardTextWithFallback() {
+  async function tryReadClipboardText() {
     try {
       const text = await navigator.clipboard.readText();
-      return { ok: true, text: text ?? "", usedFallback: false };
+      return { ok: true, text: text ?? "" };
     } catch {
-      const manual = window.prompt(
-        "Clipboard read is blocked on this page. Paste text manually and press OK to continue:"
-      );
-
-      if (manual === null) {
-        return {
-          ok: false,
-          error:
-            "Unable to access clipboard automatically here, and manual fallback was canceled."
-        };
-      }
-
-      return { ok: true, text: manual, usedFallback: true };
+      return { ok: false, text: "" };
     }
   }
 
-  async function handleContextMenu(event) {
+  async function tryWriteClipboardText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function isRightClickOnSelection(event, selection) {
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    for (const node of path) {
+      if (node instanceof Node && selection.containsNode(node, true)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function preloadClipboardForRightClick(event) {
     if (!canRunOnCurrentSite()) {
+      return;
+    }
+
+    if (event.button !== 2) {
       return;
     }
 
@@ -305,12 +362,92 @@
       return;
     }
 
-    if (!settings.alwaysPaste && !isEditorEmpty(target)) {
+    const allowDoubleRightForcePaste = isSecondRightClickOnSameTextField(target);
+
+    if (!settings.alwaysPaste && !isEditorEmpty(target) && !allowDoubleRightForcePaste) {
       return;
     }
 
+    clipboardPreload = {
+      target,
+      startedAt: Date.now(),
+      promise: tryReadClipboardText()
+    };
+  }
+
+  /**
+   * Reuses the mousedown preload when it matches; otherwise reads fresh.
+   * Does not clear an in-flight preload before its promise settles (the old consume path did).
+   */
+  async function resolveClipboardForPaste(target) {
+    const preload = clipboardPreload;
+    const preloadFresh =
+      preload &&
+      preload.target === target &&
+      Date.now() - preload.startedAt <= CLIPBOARD_PRELOAD_MAX_AGE_MS;
+
+    if (preloadFresh) {
+      try {
+        return await preload.promise;
+      } finally {
+        if (clipboardPreload === preload) {
+          clipboardPreload = null;
+        }
+      }
+    }
+
+    return tryReadClipboardText();
+  }
+
+  async function handleContextMenu(event) {
+    if (!canRunOnCurrentSite()) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    const selectedText = selection ? selection.toString() : "";
+    if (
+      settings.selectionDoubleRightClickMenu &&
+      !settings.alwaysPaste &&
+      selectedText &&
+      isRightClickOnSelection(event, selection)
+    ) {
+      if (selectedText === lastRightClickedSelectionText) {
+        lastRightClickedSelectionText = null;
+        return;
+      }
+
+      // Block the first right-click immediately so the browser menu does not flash open.
+      event.preventDefault();
+      event.stopPropagation();
+      lastRightClickedSelectionText = selectedText;
+      void tryWriteClipboardText(selectedText);
+      return;
+    }
+
+    lastRightClickedSelectionText = null;
+
+    const target = findEditableTargetFromEvent(event);
+    if (!target) {
+      return;
+    }
+
+    const isDoubleRightOnTextField = isSecondRightClickOnSameTextField(target);
+
+    if (!settings.alwaysPaste && !isEditorEmpty(target) && !isDoubleRightOnTextField) {
+      touchTextFieldContextMenu(target);
+      return;
+    }
+
+    // Must run before any await: otherwise the native menu opens and clipboard may lose user activation.
     event.preventDefault();
     event.stopPropagation();
+
+    const clipboardResult = await resolveClipboardForPaste(target);
+    if (!clipboardResult?.ok || !clipboardResult.text) {
+      touchTextFieldContextMenu(target);
+      return;
+    }
 
     target.focus({ preventScroll: true });
 
@@ -318,22 +455,23 @@
       setCaretForContentEditable(target, event.clientX, event.clientY);
     }
 
-    const clipboardResult = await readClipboardTextWithFallback();
-    if (!clipboardResult.ok) {
-      alert(`Right-Click Clipboard Paste: ${clipboardResult.error}`);
-      return;
-    }
-
     const text = clipboardResult.text;
+
     const success =
       target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
         ? insertIntoInputLike(target, text)
         : insertIntoContentEditable(target, text);
 
+    touchTextFieldContextMenu(target);
+
     if (!success) {
-      alert("Right-Click Clipboard Paste: This editor does not support scripted paste in its current state.");
+      console.warn("Right-Click Clipboard Paste: scripted insert failed; allowing normal menu next click.");
     }
   }
+
+  document.addEventListener("mousedown", (event) => {
+    preloadClipboardForRightClick(event);
+  }, true);
 
   document.addEventListener("contextmenu", (event) => {
     void handleContextMenu(event);
