@@ -6,8 +6,9 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 
 - Pastes on right-click inside editable content only when the target field is empty by default.
 - No custom extension context menu is used.
-- Reads clipboard text at click time and inserts it into the clicked editor.
+- Prefetches clipboard text on right mouse-down to keep right-click paste responsive.
 - Handles caret insertion, selection replacement, and empty-field paste.
+- Right-clicking an active text selection in editable content copies that selection to the clipboard.
 - Works with standard text inputs, textareas, and many contenteditable editors.
 - Runs through a lightweight MV3 content script across frames where permitted.
 - Does not target password fields.
@@ -29,6 +30,7 @@ A Chrome Extension (Manifest V3) that pastes clipboard text directly when you ri
 2. Right-click inside an empty editable field.
 3. Clipboard text is pasted at the caret.
 4. If the field is not empty, normal context menu behavior is preserved unless Always paste is enabled.
+5. Right-clicking directly on a selected text range copies that selected text instead of auto-pasting.
 
 ### Quick popup controls
 
@@ -73,7 +75,7 @@ The extension injects `content.js` on all URLs via `content_scripts` so it can l
 - Some sites and browser surfaces (for example internal Chrome pages) block extension scripts or clipboard reads.
 - Clipboard access via `navigator.clipboard.readText()` can fail on certain pages depending on user activation and site/browser restrictions.
 - If direct clipboard read fails, the extension preserves the normal context menu instead of auto-pasting.
-- The extension suppresses the normal right-click context menu for editable targets where auto-paste is attempted.
+- The extension suppresses the normal right-click context menu only when copy/paste automation succeeds or while a pending prefetch is still resolving.
 - Complex editors in cross-origin iframes or heavily sandboxed environments may interfere with scripted paste behavior.
 
 ## Pre-release checklist
@@ -81,5 +83,6 @@ The extension injects `content.js` on all URLs via `content_scripts` so it can l
 - Verify blocked-site behavior on exact hosts and wildcard domains.
 - Verify global enable toggle disables all intervention.
 - On a page where Clipboard API read is blocked, confirm the normal context menu still appears and no text is auto-inserted.
+- Verify right-click on selected text copies selection to clipboard in input, textarea, and contenteditable targets.
 - Test common editors (plain input, textarea, contenteditable-rich editors).
 - Confirm Chrome Web Store listing explains `clipboardRead` and `storage` permissions.
