@@ -15,6 +15,7 @@
   };
 
   let settings = { ...DEFAULT_SETTINGS };
+  let lastRightClickedSelection = "";
 
   function normalizeBlockedSites(value) {
     if (!Array.isArray(value)) {
@@ -176,6 +177,127 @@
     return null;
   }
 
+  function getSelectionFromTarget(target) {
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      const start = typeof target.selectionStart === "number" ? target.selectionStart : 0;
+      const end = typeof target.selectionEnd === "number" ? target.selectionEnd : start;
+      if (end <= start) {
+        return "";
+      }
+      return target.value.slice(start, end).trim();
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return "";
+    }
+
+    return selection.toString().trim();
+  }
+
+  function isRightClickInsideSelection(event, target) {
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      const start = typeof target.selectionStart === "number" ? target.selectionStart : 0;
+      const end = typeof target.selectionEnd === "number" ? target.selectionEnd : start;
+      return end > start;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return false;
+    }
+
+    let probeRange = null;
+    if (typeof document.caretRangeFromPoint === "function") {
+      probeRange = document.caretRangeFromPoint(event.clientX, event.clientY);
+    } else if (typeof document.caretPositionFromPoint === "function") {
+      const position = document.caretPositionFromPoint(event.clientX, event.clientY);
+      if (position) {
+        probeRange = document.createRange();
+        probeRange.setStart(position.offsetNode, position.offset);
+        probeRange.collapse(true);
+      }
+    }
+
+    if (!probeRange) {
+      return false;
+    }
+
+    const container = probeRange.startContainer;
+    const offset = probeRange.startOffset;
+
+    for (let i = 0; i < selection.rangeCount; i += 1) {
+      const range = selection.getRangeAt(i);
+      if (typeof range.isPointInRange === "function" && range.isPointInRange(container, offset)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async function copyTextToClipboard(text) {
+    if (!text) {
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const active = document.activeElement;
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "true");
+      helper.style.position = "fixed";
+      helper.style.top = "-9999px";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.focus();
+      helper.select();
+
+      const copied = document.execCommand("copy");
+      document.body.removeChild(helper);
+
+      if (active instanceof HTMLElement) {
+        active.focus({ preventScroll: true });
+      }
+
+      return copied;
+    }
+  }
+
+  async function handleSelectionRightClick(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (!isRightClickInsideSelection(event, target)) {
+      return false;
+    }
+
+    const selectedText = getSelectionFromTarget(target);
+    if (!selectedText) {
+      lastRightClickedSelection = "";
+      return false;
+    }
+
+    if (selectedText === lastRightClickedSelection) {
+      return false;
+    }
+
+    const copied = await copyTextToClipboard(selectedText);
+    if (!copied) {
+      return false;
+    }
+
+    lastRightClickedSelection = selectedText;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
   function dispatchEditableEvents(target, insertedText) {
     try {
       target.dispatchEvent(
@@ -297,6 +419,11 @@
 
   async function handleContextMenu(event) {
     if (!canRunOnCurrentSite()) {
+      return;
+    }
+
+    const selectionHandled = await handleSelectionRightClick(event);
+    if (selectionHandled) {
       return;
     }
 
