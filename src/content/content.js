@@ -274,24 +274,12 @@
     return true;
   }
 
-  async function readClipboardTextWithFallback() {
+  async function readClipboardText() {
     try {
       const text = await navigator.clipboard.readText();
-      return { ok: true, text: text ?? "", usedFallback: false };
+      return text ?? "";
     } catch {
-      const manual = window.prompt(
-        "Clipboard read is blocked on this page. Paste text manually and press OK to continue:"
-      );
-
-      if (manual === null) {
-        return {
-          ok: false,
-          error:
-            "Unable to access clipboard automatically here, and manual fallback was canceled."
-        };
-      }
-
-      return { ok: true, text: manual, usedFallback: true };
+      return "";
     }
   }
 
@@ -309,8 +297,10 @@
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
+    const text = await readClipboardText();
+    if (!text) {
+      return;
+    }
 
     target.focus({ preventScroll: true });
 
@@ -318,21 +308,17 @@
       setCaretForContentEditable(target, event.clientX, event.clientY);
     }
 
-    const clipboardResult = await readClipboardTextWithFallback();
-    if (!clipboardResult.ok) {
-      alert(`Right-Click Clipboard Paste: ${clipboardResult.error}`);
-      return;
-    }
-
-    const text = clipboardResult.text;
     const success =
       target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
         ? insertIntoInputLike(target, text)
         : insertIntoContentEditable(target, text);
 
     if (!success) {
-      alert("Right-Click Clipboard Paste: This editor does not support scripted paste in its current state.");
+      return;
     }
+
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   document.addEventListener("contextmenu", (event) => {
