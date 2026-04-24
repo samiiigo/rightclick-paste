@@ -80,6 +80,6 @@ The extension injects `content.js` on all URLs via `content_scripts` so it can l
 
 - Verify blocked-site behavior on exact hosts and wildcard domains.
 - Verify global enable toggle disables all intervention.
-- Test fallback behavior on a page where Clipboard API read is blocked.
+- On a page where Clipboard API read is blocked, confirm the normal context menu still appears and no text is auto-inserted.
 - Test common editors (plain input, textarea, contenteditable-rich editors).
 - Confirm Chrome Web Store listing explains `clipboardRead` and `storage` permissions.

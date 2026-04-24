@@ -278,6 +278,11 @@
     }
   }
 
+  function suppressContextMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   async function tryHandleCopySelectionToClipboard(event) {
     if (!(event.target instanceof HTMLElement)) {
       return false;
@@ -292,8 +297,7 @@
       return false;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
+    suppressContextMenu(event);
 
     const ok = await copyTextToClipboard(selected);
     if (ok) {
@@ -424,13 +428,10 @@
   }
 
   function shouldBlockMenuForPendingRead(p) {
-    if (!p) {
-      return false;
-    }
-    if (!p.resolved) {
-      return true;
-    }
-    return Boolean(p.result?.ok && p.result.text);
+    return (
+      Boolean(p) &&
+      (!p.resolved || Boolean(p.result?.ok && p.result.text))
+    );
   }
 
   function startPendingReadForRightMouseDownIfEligible(event) {
@@ -498,11 +499,8 @@
     }
 
     const usePending = isFreshPendingForTarget(target);
-    if (usePending) {
-      if (shouldBlockMenuForPendingRead(pendingRightClickPaste)) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
+    if (usePending && shouldBlockMenuForPendingRead(pendingRightClickPaste)) {
+      suppressContextMenu(event);
     }
 
     const { ok, text } = await consumeClipboardTextForAutoPaste(usePending);
@@ -510,12 +508,12 @@
       return;
     }
 
-    if (!usePending) {
-      event.preventDefault();
-      event.stopPropagation();
+    const success = insertClipboardTextAtContextMenuPoint(event, target, text);
+    if (!success) {
+      return;
     }
 
-    insertClipboardTextAtContextMenuPoint(event, target, text);
+    suppressContextMenu(event);
   }
 
   document.addEventListener("mousedown", (event) => {
