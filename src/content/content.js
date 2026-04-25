@@ -18,7 +18,7 @@
   let settings = { ...DEFAULT_SETTINGS };
   const CLIPBOARD_PRELOAD_MAX_AGE_MS = 1500;
   const DOUBLE_RIGHT_CLICK_MS = 500;
-  
+
   let clipboardPreload = null;
   let lastRightClickedSelectionText = null;
   let lastTextFieldContextMenu = { target: null, time: 0 };
@@ -266,11 +266,9 @@
     if (!success) console.warn("Right-Click Clipboard Paste: scripted insert failed.");
   }
 
-  // --- REWRITTEN EVENT LISTENERS ---
-
   document.addEventListener("mousedown", (event) => {
     if (!canRunOnCurrentSite() || event.button !== 2) return;
-    
+
     const target = findEditableTargetFromEvent(event);
     if (!target) return;
 
@@ -278,15 +276,13 @@
     const isDoubleClick = lastTextFieldContextMenu.target === target && (now - lastTextFieldContextMenu.time < DOUBLE_RIGHT_CLICK_MS);
 
     if (isDoubleClick) {
-      // It's a double right-click: Intercept it immediately, force paste, and block the menu
       event.preventDefault();
       event.stopPropagation();
       suppressContextMenuUntil = now + 400;
-      
-      preloadClipboardForRightClick(target); 
+
+      preloadClipboardForRightClick(target);
       void pasteClipboardIntoEditableTarget(target, event);
     } else {
-      // It's a single right-click: Start the timer
       lastTextFieldContextMenu = { target, time: now };
       preloadClipboardForRightClick(target);
     }
@@ -297,7 +293,7 @@
 
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString() : "";
-    
+
     if (settings.selectionDoubleRightClickMenu && !settings.alwaysPaste && selectedText && isRightClickOnSelection(event, selection)) {
       if (selectedText === lastRightClickedSelectionText) {
         lastRightClickedSelectionText = null;
@@ -312,7 +308,6 @@
 
     lastRightClickedSelectionText = null;
 
-    // Block the menu if the double-click sequence successfully grabbed it
     if (Date.now() < suppressContextMenuUntil) {
       event.preventDefault();
       event.stopPropagation();
@@ -322,13 +317,11 @@
     const target = findEditableTargetFromEvent(event);
     if (!target) return;
 
-    // Handle single right-click logic
     if (settings.alwaysPaste || isEditorEmpty(target)) {
       event.preventDefault();
       event.stopPropagation();
       void pasteClipboardIntoEditableTarget(target, event);
-    } 
-    // If the field isn't empty, the script does nothing here and naturally allows the native browser menu to open.
+    }
   }, true);
 
   loadSettings();
