@@ -8,7 +8,9 @@ A Chrome extension (Manifest V3) that pastes clipboard text when you right-click
 - With **Always paste** off, a **second right-click** on the same field within about half a second still pastes even if the field is not empty (no custom context menu entry).
 - Optional **double right-click on selected text**: first right-click copies the selection to the clipboard; a second right-click opens the normal context menu (useful when you still want cut/copy/search).
 - No custom extension context menu is used.
-- Reads clipboard text during the click gesture and inserts at the caret (with selection replace for inputs and textareas).
+- Prefetches clipboard text on right mouse-down to keep right-click paste responsive.
+- Handles caret insertion, selection replacement, and empty-field paste.
+- Right-clicking an active text selection in editable content copies that selection to the clipboard.
 - Works with standard text inputs (common `type` values only), textareas, and many `contenteditable` regions. Password and other non-text input types are not treated as paste targets.
 - Runs as a lightweight MV3 content script across frames where the browser allows it.
 - **Options** page: global enable, always paste, selection double-click behavior, and blocked sites.
@@ -71,14 +73,16 @@ The extension registers `src/content/content.js` for `<all_urls>` so it can atta
 ## Known limitations
 
 - Internal Chrome URLs and some other surfaces do not run extension content scripts or may block clipboard access.
-- Clipboard read uses `navigator.clipboard.readText()` and can fail depending on permissions, focus, or site policy. If read fails after the menu was suppressed, you may get neither a paste nor a context menu for that click.
-- Auto-paste replaces the native context menu for gestures where paste is attempted.
+- Clipboard read uses `navigator.clipboard.readText()` and can fail depending on permissions, focus, or site policy.
+- During auto-copy/auto-paste handling, the native context menu may be suppressed for that gesture.
 - Cross-origin iframes, sandboxing, or complex editors may interfere with caret placement or scripted insertion.
 
 ## Pre-release checklist
 
-- Confirm blocked-site rules for exact hosts and `*.` wildcards.
-- Confirm global off disables all intervention.
-- Test clipboard-denied pages (no paste, menu behavior as above).
-- Test plain `input`, `textarea`, and typical `contenteditable` editors.
-- Confirm store listing text matches **clipboardRead**, **storage**, and **tabs**.
+- Some sites and browser surfaces (for example internal Chrome pages) block extension scripts or clipboard reads.
+- Verify blocked-site behavior on exact hosts and wildcard domains.
+- Verify global enable toggle disables all intervention.
+- On a page where Clipboard API read is blocked, confirm the extension does not auto-insert unexpected text and right-click behavior remains acceptable.
+- Verify right-click on selected text copies selection to clipboard in input, textarea, and contenteditable targets.
+- Test common editors (plain input, textarea, contenteditable-rich editors).
+- Confirm Chrome Web Store listing explains `clipboardRead`, `storage`, and `tabs` permissions.
