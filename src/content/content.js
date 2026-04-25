@@ -17,73 +17,48 @@
 
   let settings = { ...DEFAULT_SETTINGS };
   const CLIPBOARD_PRELOAD_MAX_AGE_MS = 1500;
-  /** Second right-click on the same text field within this window forces paste even when not empty. */
   const DOUBLE_RIGHT_CLICK_MS = 500;
+  
   let clipboardPreload = null;
   let lastRightClickedSelectionText = null;
   let lastTextFieldContextMenu = { target: null, time: 0 };
+  let suppressContextMenuUntil = 0;
 
   function normalizeBlockedSites(value) {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-
-    return value
-      .map((entry) => String(entry || "").trim().toLowerCase())
-      .filter(Boolean);
+    if (!Array.isArray(value)) return [];
+    return value.map((entry) => String(entry || "").trim().toLowerCase()).filter(Boolean);
   }
 
   function parseHostRule(rule) {
-    if (!rule) {
-      return "";
-    }
-
+    if (!rule) return "";
     const trimmed = rule.trim().toLowerCase();
-
     try {
-      if (/^https?:\/\//.test(trimmed)) {
-        return new URL(trimmed).hostname;
-      }
+      if (/^https?:\/\//.test(trimmed)) return new URL(trimmed).hostname;
     } catch {
       return "";
     }
-
     return trimmed.replace(/^\.+|\.+$/g, "");
   }
 
   function isBlockedHost(hostname) {
     const host = String(hostname || "").toLowerCase();
-    if (!host) {
-      return false;
-    }
+    if (!host) return false;
 
     for (const rawRule of settings.blockedSites) {
       const rule = parseHostRule(rawRule);
-      if (!rule) {
-        continue;
-      }
-
+      if (!rule) continue;
       if (rule.startsWith("*.")) {
         const domain = rule.slice(2);
-        if (domain && (host === domain || host.endsWith(`.${domain}`))) {
-          return true;
-        }
+        if (domain && (host === domain || host.endsWith(`.${domain}`))) return true;
         continue;
       }
-
-      if (host === rule || host.endsWith(`.${rule}`)) {
-        return true;
-      }
+      if (host === rule || host.endsWith(`.${rule}`)) return true;
     }
-
     return false;
   }
 
   function canRunOnCurrentSite() {
-    if (!settings.enabled) {
-      return false;
-    }
-
+    if (!settings.enabled) return false;
     return !isBlockedHost(window.location.hostname);
   }
 
@@ -92,46 +67,26 @@
       enabled: typeof next.enabled === "boolean" ? next.enabled : DEFAULT_SETTINGS.enabled,
       blockedSites: normalizeBlockedSites(next.blockedSites),
       alwaysPaste: typeof next.alwaysPaste === "boolean" ? next.alwaysPaste : DEFAULT_SETTINGS.alwaysPaste,
-      selectionDoubleRightClickMenu:
-        typeof next.selectionDoubleRightClickMenu === "boolean"
-          ? next.selectionDoubleRightClickMenu
-          : DEFAULT_SETTINGS.selectionDoubleRightClickMenu
+      selectionDoubleRightClickMenu: typeof next.selectionDoubleRightClickMenu === "boolean" ? next.selectionDoubleRightClickMenu : DEFAULT_SETTINGS.selectionDoubleRightClickMenu
     };
   }
 
   function loadSettings() {
-    if (!chrome?.storage?.sync) {
-      return;
-    }
-
+    if (!chrome?.storage?.sync) return;
     chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
       hydrateSettings(stored || DEFAULT_SETTINGS);
     });
   }
 
   function watchSettingsChanges() {
-    if (!chrome?.storage?.onChanged) {
-      return;
-    }
-
+    if (!chrome?.storage?.onChanged) return;
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "sync") {
-        return;
-      }
-
+      if (areaName !== "sync") return;
       const next = { ...settings };
-      if (changes.enabled) {
-        next.enabled = changes.enabled.newValue;
-      }
-      if (changes.blockedSites) {
-        next.blockedSites = changes.blockedSites.newValue;
-      }
-      if (changes.alwaysPaste) {
-        next.alwaysPaste = changes.alwaysPaste.newValue;
-      }
-      if (changes.selectionDoubleRightClickMenu) {
-        next.selectionDoubleRightClickMenu = changes.selectionDoubleRightClickMenu.newValue;
-      }
+      if (changes.enabled) next.enabled = changes.enabled.newValue;
+      if (changes.blockedSites) next.blockedSites = changes.blockedSites.newValue;
+      if (changes.alwaysPaste) next.alwaysPaste = changes.alwaysPaste.newValue;
+      if (changes.selectionDoubleRightClickMenu) next.selectionDoubleRightClickMenu = changes.selectionDoubleRightClickMenu.newValue;
       hydrateSettings(next);
     });
   }
@@ -140,103 +95,54 @@
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
       return target.value.length === 0;
     }
-
     if (target instanceof Element && target.isContentEditable) {
       const text = (target.textContent || "").trim();
       return text.length === 0;
     }
-
     return false;
   }
 
   function isTextFieldElement(node) {
-    if (!(node instanceof Element)) {
-      return false;
-    }
-
-    if (node instanceof HTMLTextAreaElement) {
-      return !node.disabled && !node.readOnly;
-    }
-
+    if (!(node instanceof Element)) return false;
+    if (node instanceof HTMLTextAreaElement) return !node.disabled && !node.readOnly;
     if (node instanceof HTMLInputElement) {
       const type = (node.type || "text").toLowerCase();
       return TEXT_INPUT_TYPES.has(type) && !node.disabled && !node.readOnly;
     }
-
     return false;
   }
 
   function isEditableElement(node) {
-    if (isTextFieldElement(node)) {
-      return true;
-    }
-
-    if (!(node instanceof Element)) {
-      return false;
-    }
-
+    if (isTextFieldElement(node)) return true;
+    if (!(node instanceof Element)) return false;
     return node.isContentEditable;
-  }
-
-  function isSecondRightClickOnSameTextField(target) {
-    if (!isTextFieldElement(target)) {
-      return false;
-    }
-
-    const { target: lastTarget, time } = lastTextFieldContextMenu;
-    return lastTarget === target && Date.now() - time < DOUBLE_RIGHT_CLICK_MS;
-  }
-
-  function touchTextFieldContextMenu(target) {
-    if (isTextFieldElement(target)) {
-      lastTextFieldContextMenu = { target, time: Date.now() };
-    }
   }
 
   function findEditableTargetFromEvent(event) {
     const path = typeof event.composedPath === "function" ? event.composedPath() : [];
-
     for (const node of path) {
-      if (isEditableElement(node)) {
-        return node;
-      }
-
+      if (isEditableElement(node)) return node;
       if (node instanceof Element) {
         const nearest = node.closest("textarea, input, [contenteditable]");
-        if (isEditableElement(nearest)) {
-          return nearest;
-        }
+        if (isEditableElement(nearest)) return nearest;
       }
     }
-
     const active = document.activeElement;
-    if (isEditableElement(active)) {
-      return active;
-    }
-
+    if (isEditableElement(active)) return active;
     return null;
   }
 
   function dispatchEditableEvents(target, insertedText) {
     try {
-      target.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          composed: true,
-          inputType: "insertFromPaste",
-          data: insertedText
-        })
-      );
+      target.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertFromPaste", data: insertedText }));
     } catch {
       target.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
     }
-
     target.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   function setCaretForContentEditable(target, x, y) {
     let range = null;
-
     if (typeof document.caretRangeFromPoint === "function") {
       range = document.caretRangeFromPoint(x, y);
     } else if (typeof document.caretPositionFromPoint === "function") {
@@ -247,16 +153,9 @@
         range.collapse(true);
       }
     }
-
-    if (!range || !target.contains(range.commonAncestorContainer)) {
-      return;
-    }
-
+    if (!range || !target.contains(range.commonAncestorContainer)) return;
     const selection = window.getSelection();
-    if (!selection) {
-      return;
-    }
-
+    if (!selection) return;
     selection.removeAllRanges();
     selection.addRange(range);
   }
@@ -264,27 +163,20 @@
   function insertIntoInputLike(target, text) {
     const start = typeof target.selectionStart === "number" ? target.selectionStart : target.value.length;
     const end = typeof target.selectionEnd === "number" ? target.selectionEnd : start;
-
     if (typeof target.setRangeText === "function") {
       target.setRangeText(text, start, end, "end");
     } else {
       target.value = target.value.slice(0, start) + text + target.value.slice(end);
       const nextCaret = start + text.length;
-      if (typeof target.setSelectionRange === "function") {
-        target.setSelectionRange(nextCaret, nextCaret);
-      }
+      if (typeof target.setSelectionRange === "function") target.setSelectionRange(nextCaret, nextCaret);
     }
-
     dispatchEditableEvents(target, text);
     return true;
   }
 
   function insertIntoContentEditable(target, text) {
     const selection = window.getSelection();
-    if (!selection) {
-      return false;
-    }
-
+    if (!selection) return false;
     let range;
     if (selection.rangeCount > 0) {
       range = selection.getRangeAt(0);
@@ -293,7 +185,6 @@
       range.selectNodeContents(target);
       range.collapse(false);
     }
-
     if (!target.contains(range.commonAncestorContainer)) {
       range = document.createRange();
       range.selectNodeContents(target);
@@ -301,16 +192,13 @@
       selection.removeAllRanges();
       selection.addRange(range);
     }
-
     range.deleteContents();
     const textNode = document.createTextNode(text);
     range.insertNode(textNode);
-
     range.setStartAfter(textNode);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
-
     dispatchEditableEvents(target, text);
     return true;
   }
@@ -334,40 +222,15 @@
   }
 
   function isRightClickOnSelection(event, selection) {
-    if (!selection || selection.rangeCount === 0) {
-      return false;
-    }
-
+    if (!selection || selection.rangeCount === 0) return false;
     const path = typeof event.composedPath === "function" ? event.composedPath() : [];
     for (const node of path) {
-      if (node instanceof Node && selection.containsNode(node, true)) {
-        return true;
-      }
+      if (node instanceof Node && selection.containsNode(node, true)) return true;
     }
-
     return false;
   }
 
-  function preloadClipboardForRightClick(event) {
-    if (!canRunOnCurrentSite()) {
-      return;
-    }
-
-    if (event.button !== 2) {
-      return;
-    }
-
-    const target = findEditableTargetFromEvent(event);
-    if (!target) {
-      return;
-    }
-
-    const allowDoubleRightForcePaste = isSecondRightClickOnSameTextField(target);
-
-    if (!settings.alwaysPaste && !isEditorEmpty(target) && !allowDoubleRightForcePaste) {
-      return;
-    }
-
+  function preloadClipboardForRightClick(target) {
     clipboardPreload = {
       target,
       startedAt: Date.now(),
@@ -375,49 +238,71 @@
     };
   }
 
-  /**
-   * Reuses the mousedown preload when it matches; otherwise reads fresh.
-   * Does not clear an in-flight preload before its promise settles (the old consume path did).
-   */
   async function resolveClipboardForPaste(target) {
     const preload = clipboardPreload;
-    const preloadFresh =
-      preload &&
-      preload.target === target &&
-      Date.now() - preload.startedAt <= CLIPBOARD_PRELOAD_MAX_AGE_MS;
-
+    const preloadFresh = preload && preload.target === target && Date.now() - preload.startedAt <= CLIPBOARD_PRELOAD_MAX_AGE_MS;
     if (preloadFresh) {
       try {
         return await preload.promise;
       } finally {
-        if (clipboardPreload === preload) {
-          clipboardPreload = null;
-        }
+        if (clipboardPreload === preload) clipboardPreload = null;
       }
     }
-
     return tryReadClipboardText();
   }
 
-  async function handleContextMenu(event) {
-    if (!canRunOnCurrentSite()) {
-      return;
+  async function pasteClipboardIntoEditableTarget(target, event) {
+    const clipboardResult = await resolveClipboardForPaste(target);
+    if (!clipboardResult?.ok || !clipboardResult.text) return;
+
+    target.focus({ preventScroll: true });
+    if (target.isContentEditable) setCaretForContentEditable(target, event.clientX, event.clientY);
+
+    const text = clipboardResult.text;
+    const success = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+        ? insertIntoInputLike(target, text)
+        : insertIntoContentEditable(target, text);
+
+    if (!success) console.warn("Right-Click Clipboard Paste: scripted insert failed.");
+  }
+
+  // --- REWRITTEN EVENT LISTENERS ---
+
+  document.addEventListener("mousedown", (event) => {
+    if (!canRunOnCurrentSite() || event.button !== 2) return;
+    
+    const target = findEditableTargetFromEvent(event);
+    if (!target) return;
+
+    const now = Date.now();
+    const isDoubleClick = lastTextFieldContextMenu.target === target && (now - lastTextFieldContextMenu.time < DOUBLE_RIGHT_CLICK_MS);
+
+    if (isDoubleClick) {
+      // It's a double right-click: Intercept it immediately, force paste, and block the menu
+      event.preventDefault();
+      event.stopPropagation();
+      suppressContextMenuUntil = now + 400;
+      
+      preloadClipboardForRightClick(target); 
+      void pasteClipboardIntoEditableTarget(target, event);
+    } else {
+      // It's a single right-click: Start the timer
+      lastTextFieldContextMenu = { target, time: now };
+      preloadClipboardForRightClick(target);
     }
+  }, true);
+
+  document.addEventListener("contextmenu", (event) => {
+    if (!canRunOnCurrentSite()) return;
 
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString() : "";
-    if (
-      settings.selectionDoubleRightClickMenu &&
-      !settings.alwaysPaste &&
-      selectedText &&
-      isRightClickOnSelection(event, selection)
-    ) {
+    
+    if (settings.selectionDoubleRightClickMenu && !settings.alwaysPaste && selectedText && isRightClickOnSelection(event, selection)) {
       if (selectedText === lastRightClickedSelectionText) {
         lastRightClickedSelectionText = null;
         return;
       }
-
-      // Block the first right-click immediately so the browser menu does not flash open.
       event.preventDefault();
       event.stopPropagation();
       lastRightClickedSelectionText = selectedText;
@@ -427,54 +312,23 @@
 
     lastRightClickedSelectionText = null;
 
+    // Block the menu if the double-click sequence successfully grabbed it
+    if (Date.now() < suppressContextMenuUntil) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const target = findEditableTargetFromEvent(event);
-    if (!target) {
-      return;
-    }
+    if (!target) return;
 
-    const isDoubleRightOnTextField = isSecondRightClickOnSameTextField(target);
-
-    if (!settings.alwaysPaste && !isEditorEmpty(target) && !isDoubleRightOnTextField) {
-      touchTextFieldContextMenu(target);
-      return;
-    }
-
-    // Must run before any await: otherwise the native menu opens and clipboard may lose user activation.
-    event.preventDefault();
-    event.stopPropagation();
-
-    const clipboardResult = await resolveClipboardForPaste(target);
-    if (!clipboardResult?.ok || !clipboardResult.text) {
-      touchTextFieldContextMenu(target);
-      return;
-    }
-
-    target.focus({ preventScroll: true });
-
-    if (target.isContentEditable) {
-      setCaretForContentEditable(target, event.clientX, event.clientY);
-    }
-
-    const text = clipboardResult.text;
-
-    const success =
-      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-        ? insertIntoInputLike(target, text)
-        : insertIntoContentEditable(target, text);
-
-    touchTextFieldContextMenu(target);
-
-    if (!success) {
-      console.warn("Right-Click Clipboard Paste: scripted insert failed; allowing normal menu next click.");
-    }
-  }
-
-  document.addEventListener("mousedown", (event) => {
-    preloadClipboardForRightClick(event);
-  }, true);
-
-  document.addEventListener("contextmenu", (event) => {
-    void handleContextMenu(event);
+    // Handle single right-click logic
+    if (settings.alwaysPaste || isEditorEmpty(target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      void pasteClipboardIntoEditableTarget(target, event);
+    } 
+    // If the field isn't empty, the script does nothing here and naturally allows the native browser menu to open.
   }, true);
 
   loadSettings();
