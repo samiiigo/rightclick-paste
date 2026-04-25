@@ -2,11 +2,13 @@
   const DEFAULTS = {
     enabled: true,
     blockedSites: [],
-    alwaysPaste: false
+    alwaysPaste: false,
+    selectionDoubleRightClickMenu: true
   };
 
   const enabledCheckbox = document.getElementById("enabled");
   const alwaysPasteCheckbox = document.getElementById("alwaysPaste");
+  const selectionDoubleRightClickMenuCheckbox = document.getElementById("selectionDoubleRightClickMenu");
   const blockedSitesTextarea = document.getElementById("blockedSites");
   const saveButton = document.getElementById("save");
   const statusLabel = document.getElementById("status");
@@ -31,6 +33,10 @@
     chrome.storage.sync.get(DEFAULTS, (items) => {
       enabledCheckbox.checked = Boolean(items.enabled);
       alwaysPasteCheckbox.checked = Boolean(items.alwaysPaste);
+      selectionDoubleRightClickMenuCheckbox.checked =
+        typeof items.selectionDoubleRightClickMenu === "boolean"
+          ? items.selectionDoubleRightClickMenu
+          : DEFAULTS.selectionDoubleRightClickMenu;
       blockedSitesTextarea.value = Array.isArray(items.blockedSites)
         ? items.blockedSites.join("\n")
         : "";
@@ -42,6 +48,7 @@
     const payload = {
       enabled: enabledCheckbox.checked,
       alwaysPaste: alwaysPasteCheckbox.checked,
+      selectionDoubleRightClickMenu: selectionDoubleRightClickMenuCheckbox.checked,
       blockedSites
     };
 

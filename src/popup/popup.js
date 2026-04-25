@@ -2,12 +2,14 @@
   const DEFAULTS = {
     enabled: true,
     blockedSites: [],
-    alwaysPaste: false
+    alwaysPaste: false,
+    selectionDoubleRightClickMenu: true
   };
 
   const globalToggle = document.getElementById("toggleGlobal");
   const siteToggle = document.getElementById("toggleSite");
   const alwaysPasteToggle = document.getElementById("toggleAlwaysPaste");
+  const selectionDoubleRightClickMenuToggle = document.getElementById("toggleSelectionDoubleRightClickMenu");
   const siteHostLabel = document.getElementById("siteHost");
   const globalStatus = document.getElementById("globalStatus");
   const siteStatus = document.getElementById("siteStatus");
@@ -80,7 +82,11 @@
       callback({
         enabled: typeof stored.enabled === "boolean" ? stored.enabled : DEFAULTS.enabled,
         blockedSites: normalizeRules(stored.blockedSites),
-        alwaysPaste: typeof stored.alwaysPaste === "boolean" ? stored.alwaysPaste : DEFAULTS.alwaysPaste
+        alwaysPaste: typeof stored.alwaysPaste === "boolean" ? stored.alwaysPaste : DEFAULTS.alwaysPaste,
+        selectionDoubleRightClickMenu:
+          typeof stored.selectionDoubleRightClickMenu === "boolean"
+            ? stored.selectionDoubleRightClickMenu
+            : DEFAULTS.selectionDoubleRightClickMenu
       });
     });
   }
@@ -93,6 +99,7 @@
     siteToggle.checked = !blocked;
     updateSiteStatus(!blocked && settings.enabled);
     alwaysPasteToggle.checked = settings.alwaysPaste;
+    selectionDoubleRightClickMenuToggle.checked = settings.selectionDoubleRightClickMenu;
   }
 
   function saveSettings(next) {
@@ -106,7 +113,8 @@
       const next = {
         enabled: globalToggle.checked,
         blockedSites: settings.blockedSites,
-        alwaysPaste: settings.alwaysPaste
+        alwaysPaste: settings.alwaysPaste,
+        selectionDoubleRightClickMenu: settings.selectionDoubleRightClickMenu
       };
       saveSettings(next);
     });
@@ -128,7 +136,8 @@
       const next = {
         enabled: settings.enabled,
         blockedSites: Array.from(set).sort(),
-        alwaysPaste: settings.alwaysPaste
+        alwaysPaste: settings.alwaysPaste,
+        selectionDoubleRightClickMenu: settings.selectionDoubleRightClickMenu
       };
       saveSettings(next);
     });
@@ -139,7 +148,20 @@
       const next = {
         enabled: settings.enabled,
         blockedSites: settings.blockedSites,
-        alwaysPaste: alwaysPasteToggle.checked
+        alwaysPaste: alwaysPasteToggle.checked,
+        selectionDoubleRightClickMenu: settings.selectionDoubleRightClickMenu
+      };
+      saveSettings(next);
+    });
+  }
+
+  function toggleSelectionDoubleRightClickMenu() {
+    withStorage((settings) => {
+      const next = {
+        enabled: settings.enabled,
+        blockedSites: settings.blockedSites,
+        alwaysPaste: settings.alwaysPaste,
+        selectionDoubleRightClickMenu: selectionDoubleRightClickMenuToggle.checked
       };
       saveSettings(next);
     });
@@ -149,6 +171,7 @@
     globalToggle.addEventListener("change", toggleGlobal);
     siteToggle.addEventListener("change", toggleSite);
     alwaysPasteToggle.addEventListener("change", toggleAlwaysPaste);
+    selectionDoubleRightClickMenuToggle.addEventListener("change", toggleSelectionDoubleRightClickMenu);
     optionsLink.addEventListener("click", (event) => {
       event.preventDefault();
       chrome.runtime.openOptionsPage();
